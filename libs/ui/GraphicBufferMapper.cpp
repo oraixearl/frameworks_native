@@ -231,6 +231,58 @@ status_t GraphicBufferMapper::lockAsyncYCbCr(buffer_handle_t handle,
         unlock(handle);
         return GRALLOC1_ERROR_UNSUPPORTED;
     }
+    if (yPlane == planes.cend()) {
+        ALOGV("Unable to find Y plane");
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+    if (cbPlane == planes.cend()) {
+        ALOGV("Unable to find Cb plane");
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+    if (crPlane == planes.cend()) {
+        ALOGV("Unable to find Cr plane");
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+
+    // Validate planes
+    if (!isValidYCbCrPlane(*yPlane)) {
+        ALOGV("Y plane is invalid");
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+    if (!isValidYCbCrPlane(*cbPlane)) {
+        ALOGV("Cb plane is invalid");
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+    if (!isValidYCbCrPlane(*crPlane)) {
+        ALOGV("Cr plane is invalid");
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+    if (cbPlane->v_increment != crPlane->v_increment) {
+        ALOGV("Cb and Cr planes have different step (%d vs. %d)",
+                cbPlane->v_increment, crPlane->v_increment);
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+    if (cbPlane->h_increment != crPlane->h_increment) {
+        ALOGV("Cb and Cr planes have different stride (%d vs. %d)",
+                cbPlane->h_increment, crPlane->h_increment);
+        unlock(handle);
+        return GRALLOC1_ERROR_UNSUPPORTED;
+    }
+
+    // Pack plane data into android_ycbcr struct
+    ycbcr->y = yPlane->top_left;
+    ycbcr->cb = cbPlane->top_left;
+    ycbcr->cr = crPlane->top_left;
+    ycbcr->ystride = static_cast<size_t>(yPlane->v_increment);
+    ycbcr->cstride = static_cast<size_t>(cbPlane->v_increment);
+    ycbcr->chroma_step = static_cast<size_t>(cbPlane->h_increment);
 
     // Validate planes
     if (!isValidYCbCrPlane(*yPlane)) {
@@ -286,6 +338,19 @@ status_t GraphicBufferMapper::unlockAsync(buffer_handle_t handle, int *fenceFd)
     *fenceFd = fence->dup();
     return error;
 }
+
+#ifdef EXYNOS4_ENHANCEMENTS
+status_t GraphicBufferMapper::getphys(buffer_handle_t handle, void** paddr)
+{
+    status_t err;
+
+    err = mDevice->getphys(handle, paddr);
+
+    ALOGW_IF(err, "getphys(%p) fail %d(%s)", handle, err, strerror(-err));
+    return err;
+}
+#endif
+
 
 // ---------------------------------------------------------------------------
 }; // namespace android
